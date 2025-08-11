@@ -33,8 +33,8 @@ https://www.varnish-cache.org/docs/3.0/tutorial/purging.html
 """
 from telnetlib import Telnet
 from threading import Thread
-from httplib import HTTPConnection
-from urlparse import urlparse
+from http.client import HTTPConnection
+from urllib.parse import urlparse
 from hashlib import sha256
 import logging
 
