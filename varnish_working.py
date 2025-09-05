@@ -83,8 +83,10 @@ class VarnishHandler(Telnet):
 
     def _read(self):
         (status, length), content = map(int, self.read_until(b"\n").split()), ""
+        print("{}, {}, {}".format(status, length, content))
         while len(content) < length:
             content += self.read_some().decode("ascii")
+        print("{}, {}, {}".format(status, length, content))
         return (status, length), content[:-1]
 
     def fetch(self, command):
@@ -124,11 +126,16 @@ class VarnishHandler(Telnet):
         return self.close()
 
     def auth(self, secret, content):
+        print(type(secret), type(content))
+        print(secret, content)
         challenge = content[:32]
-        response = sha256(
-            "{}\n{}\n{}\n".format(challenge, secret, challenge).encode("ascii")
-        )
+        print(type(challenge))
+        print(challenge)
+        te = "{}\n{}\n{}\n".format(challenge, secret, challenge)
+        # response = sha256("%s\n%s%s\n" % (challenge, secret, challenge))
+        response = sha256(te.encode("ascii"))
         response_str = "auth %s" % response.hexdigest()
+        print(response_str)
         self.fetch(response_str)
 
     # Information methods
