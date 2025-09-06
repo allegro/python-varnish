@@ -93,7 +93,6 @@ class VarnishHandler(Telnet):
         return value is a tuple of ((status, length), content)
         """
         logging.debug("SENT: %s: %s" % (self.host, command))
-        logging.debug("SENT: {}: {}".format(self.host, command))
         self.write(("{}\n".format(command)).encode("ascii"))
         while 1:
             buffer = self.read_until(b"\n").strip()
