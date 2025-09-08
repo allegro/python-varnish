@@ -105,7 +105,7 @@ class VarnishHandler(Telnet):
         )
         while len(content) < length:
             content += self.read_until(b"\n").decode("ascii")
-        logging.debug(f"RECV: %{status}: %{lenght}B %{content[:31]}")
+        logging.debug(f"RECV: %{status}: %{lenght}B %{content[:30]}")
         self.read_eager()
         return (status, length), content
 
@@ -204,7 +204,7 @@ class VarnishHandler(Telnet):
         vcls = {}
         for line in self.fetch("vcl.list")[1].splitlines():
             a = line.split()
-            vcls[a[2]] = tuple(a[:-1])
+            vcls[a[-1]] = tuple(a[:-1])
         return vcls
 
     # Param methods
