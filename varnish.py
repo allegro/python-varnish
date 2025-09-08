@@ -79,7 +79,7 @@ class VarnishHandler(Telnet):
         if status == 107 and secret is not None:
             self.auth(secret, content)
         elif status != 200:
-            logging.error(f"Connecting failed with status: {status})"
+            logging.error(f"Connecting failed with status: {status}")
 
     def _read(self):
         (status, length), content = map(int, self.read_until(b"\n").split()), ""
@@ -124,9 +124,7 @@ class VarnishHandler(Telnet):
 
     def auth(self, secret, content):
         challenge = content[:32]
-        response = sha256(
-            f"{challenge}\n{secret}\n{challenge}\n".encode("ascii")
-        )
+        response = sha256(f"{challenge}\n{secret}\n{challenge}\n".encode("ascii"))
         response_str = "auth %s" % response.hexdigest()
         self.fetch(response_str)
 
