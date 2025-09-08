@@ -56,9 +56,7 @@ def http_purge_url(url):
     path = url.path or "/"
     connection.request(
         "PURGE",
-        f"{path}{'?' + url.query if url.query else ''}%s?%s" % (path, url.query)
-        if url.query
-        else path,
+        f"{path}?{url.query}" if url.query else path,
         "",
         {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname},
     )
