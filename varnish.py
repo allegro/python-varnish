@@ -58,7 +58,7 @@ def http_purge_url(url):
         "PURGE",
         f"{path}?{url.query}" if url.query else path,
         "",
-        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname}
+        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname},
     )
     response = connection.getresponse()
     if response.status != 200:
@@ -105,7 +105,7 @@ class VarnishHandler(Telnet):
         )
         while len(content) < length:
             content += self.read_until(b"\n").decode("ascii")
-        logging.debug(f"RECV: {status}: {lenght}B {content[:30]}")
+        logging.debug(f"RECV: {status}: {length}B {content[:30]}")
         self.read_eager()
         return (status, length), content
 
@@ -124,7 +124,7 @@ class VarnishHandler(Telnet):
 
     def auth(self, secret, content):
         challenge = content[:32]
-        response = sha256(f"{challenge}\n{secret}{challenge}\n".encode("ascii"))
+        response = sha256(f"{challenge}\n{secret}\n{challenge}\n".encode("ascii"))
         response_str = f"auth {response.hexdigest()}"
         self.fetch(response_str)
 
