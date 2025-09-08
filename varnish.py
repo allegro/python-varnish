@@ -56,9 +56,11 @@ def http_purge_url(url):
     path = url.path or "/"
     connection.request(
         "PURGE",
-        "%s?%s" % (path, url.query) if url.query else path,
+        f"{path}{'?' + url.query if url.query else ''}%s?%s" % (path, url.query)
+        if url.query
+        else path,
         "",
-        {"Host": "%s:%s" % (url.hostname, url.port) if url.port else url.hostname},
+        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname},
     )
     response = connection.getresponse()
     if response.status != 200:
@@ -79,7 +81,7 @@ class VarnishHandler(Telnet):
         if status == 107 and secret is not None:
             self.auth(secret, content)
         elif status != 200:
-            logging.error("Connecting failed with status: %i" % status)
+            logging.error(f"Connecting failed with status: {status})"
 
     def _read(self):
         (status, length), content = map(int, self.read_until(b"\n").split()), ""
@@ -92,8 +94,8 @@ class VarnishHandler(Telnet):
         Run a command on the Varnish backend and return the result
         return value is a tuple of ((status, length), content)
         """
-        logging.debug("SENT: %s: %s" % (self.host, command))
-        self.write(("{}\n".format(command)).encode("ascii"))
+        logging.debug(f"SENT: {self.host}: {command}")
+        self.write(f"{command}\n".encode("ascii"))
         while 1:
             buffer = self.read_until(b"\n").strip()
             if len(buffer):
@@ -105,7 +107,7 @@ class VarnishHandler(Telnet):
         )
         while len(content) < length:
             content += self.read_until(b"\n").decode("ascii")
-        logging.debug("RECV: %s: %dB %s" % (status, length, content[:31]))
+        logging.debug(f"RECV: %{status}: %{lenght}B %{content[:31]}")
         self.read_eager()
         return (status, length), content
 
@@ -125,7 +127,7 @@ class VarnishHandler(Telnet):
     def auth(self, secret, content):
         challenge = content[:32]
         response = sha256(
-            "{}\n{}\n{}\n".format(challenge, secret, challenge).encode("ascii")
+            f"{challenge}\n{secret}\n{challenge}\n".encode("ascii")
         )
         response_str = "auth %s" % response.hexdigest()
         self.fetch(response_str)
@@ -153,7 +155,7 @@ class VarnishHandler(Telnet):
         """
         cmd = "help"
         if command:
-            cmd += " %s" % command
+            cmd += f" {comand}"
         return self.fetch(cmd)[1]
 
     # VCL methods
@@ -162,7 +164,7 @@ class VarnishHandler(Telnet):
         vcl.load configname filename
             Create a new configuration named configname with the contents of the specified file.
         """
-        return self.fetch("vcl.load %s %s" % (configname, filename))
+        return self.fetch(f"vcl.load {configname} {filename}")
 
     def vcl_inline(self, configname, vclcontent):
         """
@@ -170,14 +172,14 @@ class VarnishHandler(Telnet):
             Create a new configuration named configname with the VCL code specified by vcl, which must be  a
             quoted string.
         """
-        return self.fetch("vcl.inline %s %s" % (configname, vclcontent))
+        return self.fetch(f"vcl.inline {configname} {vclcontent}")
 
     def vcl_show(self, configname):
         """
         vcl.show configname
             Display the source code for the specified configuration.
         """
-        return self.fetch("vcl.show %s" % configname)
+        return self.fetch(f"vcl.show {configname}")
 
     def vcl_use(self, configname):
         """
@@ -185,7 +187,7 @@ class VarnishHandler(Telnet):
             Start using the configuration specified by configname for all new requests.   Existing  requests
             will coninue using whichever configuration was in use when they arrived.
         """
-        return self.fetch("vcl.use %s" % configname)
+        return self.fetch(f"vcl.use {configname}")
 
     def vcl_discard(self, configname):
         """
@@ -193,7 +195,7 @@ class VarnishHandler(Telnet):
             Discard  the  configuration  specified by configname.  This will have no effect if the specified
             configuration has a non-zero reference count.
         """
-        return self.fetch("vcl.discard %s" % configname)
+        return self.fetch(f"vcl.discard {configname}")
 
     def vcl_list(self):
         """
@@ -226,7 +228,7 @@ class VarnishHandler(Telnet):
               Set the parameter specified by param to the specified value.  See Run-Time Parameters for a list
               of paramea ters.
         """
-        self.fetch("param.set %s %s" % (param, value))
+        self.fetch(f"param.set {param} {value}")
 
     # Ban methods
     def ban(self, expression):
@@ -235,7 +237,7 @@ class VarnishHandler(Telnet):
             Immediately invalidate all documents matching the ban expression.  See Ban Expressions for  more
             documentation and examples.
         """
-        return self.fetch("ban %s" % expression)[1]
+        return self.fetch(f"ban {expression}")[1]
 
     def ban_url(self, regex):
         """
@@ -244,7 +246,7 @@ class VarnishHandler(Telnet):
             note  that the Host part of the URL is ignored, so if you have several virtual hosts all of them
             will be banned. Use ban to specify a complete ban if you need to narrow it down.
         """
-        return self.fetch("ban.url %s" % regex)[1]
+        return self.fetch(f"ban.url {regex}")[1]
 
     def ban_list(self):
         """
