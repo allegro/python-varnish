@@ -58,7 +58,7 @@ def http_purge_url(url):
         "PURGE",
         f"{path}?{url.query}" if url.query else path,
         "",
-        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname},
+        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname}
     )
     response = connection.getresponse()
     if response.status != 200:
@@ -124,7 +124,7 @@ class VarnishHandler(Telnet):
 
     def auth(self, secret, content):
         challenge = content[:32]
-        response = sha256(f"{challenge}\n{secret}\n{challenge}\n".encode("ascii"))
+        response = sha256(f"{challenge}\n{secret}{challenge}\n".encode("ascii"))
         response_str = f"auth {response.hexdigest()}"
         self.fetch(response_str)
 
@@ -151,7 +151,7 @@ class VarnishHandler(Telnet):
         """
         cmd = "help"
         if command:
-            cmd += f" {comand}"
+            cmd += f" {command}"
         return self.fetch(cmd)[1]
 
     # VCL methods
