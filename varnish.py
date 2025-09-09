@@ -31,6 +31,7 @@ Also VarnishManager.purge will do HTTP purges. See below for configuration detai
 https://www.varnish-cache.org/docs/3.0/tutorial/purging.html
 
 """
+
 from telnetlib import Telnet
 from threading import Thread
 from http.client import HTTPConnection
@@ -40,9 +41,10 @@ import logging
 
 
 logging.basicConfig(
-    level = logging.DEBUG,
-    format = '%(asctime)s %(levelname)s %(message)s',
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(message)s",
 )
+
 
 def http_purge_url(url):
     """
@@ -51,33 +53,38 @@ def http_purge_url(url):
     """
     url = urlparse(url)
     connection = HTTPConnection(url.hostname, url.port or 80)
-    path = url.path or '/'
-    connection.request('PURGE', '%s?%s' % (path, url.query) if url.query else path, '',
-                       {'Host': '%s:%s' % (url.hostname, url.port) if url.port else url.hostname})
+    path = url.path or "/"
+    connection.request(
+        "PURGE",
+        f"{path}?{url.query}" if url.query else path,
+        "",
+        {"Host": f"{url.hostname}:{url.port}" if url.port else url.hostname},
+    )
     response = connection.getresponse()
     if response.status != 200:
-        logging.error('Purge failed with status: %s' % response.status)
+        logging.error(f"Purge failed with status: {response.status}")
     return response
+
 
 class VarnishHandler(Telnet):
     def __init__(self, host_port_timeout, secret=None, **kwargs):
-        if isinstance(host_port_timeout, basestring):
-            host_port_timeout = host_port_timeout.split(':')
+        if isinstance(host_port_timeout, (str, bytes)):
+            host_port_timeout = host_port_timeout.split(":")
 
-            if (len(host_port_timeout) == 3):
+            if len(host_port_timeout) == 3:
                 host_port_timeout[2] = float(host_port_timeout[2])
 
         Telnet.__init__(self, *host_port_timeout)
-        (status, length), content = self._read()
+        (status, _), content = self._read()
         if status == 107 and secret is not None:
             self.auth(secret, content)
         elif status != 200:
-            logging.error('Connecting failed with status: %i' % status)
+            logging.error(f"Connecting failed with status: {status}")
 
     def _read(self):
-        (status, length), content = map(int, self.read_until('\n').split()), ''
+        (status, length), content = map(int, self.read_until(b"\n").split()), ""
         while len(content) < length:
-            content += self.read_some()
+            content += self.read_some().decode("ascii")
         return (status, length), content[:-1]
 
     def fetch(self, command):
@@ -85,29 +92,31 @@ class VarnishHandler(Telnet):
         Run a command on the Varnish backend and return the result
         return value is a tuple of ((status, length), content)
         """
-        logging.debug('SENT: %s: %s' % (self.host, command))
-        self.write('%s\n' % command)
+        logging.debug(f"SENT: {self.host}: {command}")
+        self.write(f"{command}\n".encode("ascii"))
         while 1:
-            buffer = self.read_until('\n').strip()
+            buffer = self.read_until(b"\n").strip()
             if len(buffer):
                 break
         status, length = map(int, buffer.split())
-        content = ''
-        assert status == 200, 'Bad response code: {status} {text} ({command})'.format(status=status, text=self.read_until('\n').strip(), command=command)
+        content = ""
+        assert status == 200, "Bad response code: {status} {text} ({command})".format(
+            status=status, text=self.read_until(b"\n").strip(), command=command
+        )
         while len(content) < length:
-            content += self.read_until('\n')
-        logging.debug('RECV: %s: %dB %s' % (status,length,content[:30]))
+            content += self.read_until(b"\n").decode("ascii")
+        logging.debug(f"RECV: {status}: {length}B {content[:30]}")
         self.read_eager()
         return (status, length), content
 
     # Service control methods
     def start(self):
         """start  Start the Varnish cache process if it is not already running."""
-        return self.fetch('start')
+        return self.fetch("start")
 
     def stop(self):
         """stop   Stop the Varnish cache process."""
-        return self.fetch('stop')
+        return self.fetch("stop")
 
     def quit(self):
         """quit   Close the connection to the varnish admin port."""
@@ -115,8 +124,8 @@ class VarnishHandler(Telnet):
 
     def auth(self, secret, content):
         challenge = content[:32]
-        response = sha256('%s\n%s%s\n' % (challenge, secret, challenge))
-        response_str = 'auth %s' % response.hexdigest()
+        response = sha256(f"{challenge}\n{secret}\n{challenge}\n".encode("ascii"))
+        response_str = f"auth {response.hexdigest()}"
         self.fetch(response_str)
 
     # Information methods
@@ -125,13 +134,14 @@ class VarnishHandler(Telnet):
         ping [timestamp]
             Ping the Varnish cache process, keeping the connection alive.
         """
-        cmd = 'ping'
-        if timestamp: cmd += ' %s' % timestamp
+        cmd = "ping"
+        if timestamp:
+            cmd += f" {timestamp}"
         return tuple(map(float, self.fetch(cmd)[1].split()[1:]))
 
     def status(self):
         """status Check the status of the Varnish cache process."""
-        return self.fetch('status')[1]
+        return self.fetch("status")[1]
 
     def help(self, command=None):
         """
@@ -139,8 +149,9 @@ class VarnishHandler(Telnet):
             Display a list of available commands.
             If the command is specified, display help for this command.
         """
-        cmd = 'help'
-        if command: cmd += ' %s' % command
+        cmd = "help"
+        if command:
+            cmd += f" {command}"
         return self.fetch(cmd)[1]
 
     # VCL methods
@@ -149,7 +160,7 @@ class VarnishHandler(Telnet):
         vcl.load configname filename
             Create a new configuration named configname with the contents of the specified file.
         """
-        return self.fetch('vcl.load %s %s' % (configname, filename))
+        return self.fetch(f"vcl.load {configname} {filename}")
 
     def vcl_inline(self, configname, vclcontent):
         """
@@ -157,14 +168,14 @@ class VarnishHandler(Telnet):
             Create a new configuration named configname with the VCL code specified by vcl, which must be  a
             quoted string.
         """
-        return self.fetch('vcl.inline %s %s' % (configname, vclcontent))
+        return self.fetch(f"vcl.inline {configname} {vclcontent}")
 
     def vcl_show(self, configname):
         """
         vcl.show configname
             Display the source code for the specified configuration.
         """
-        return self.fetch('vcl.show %s' % configname)
+        return self.fetch(f"vcl.show {configname}")
 
     def vcl_use(self, configname):
         """
@@ -172,7 +183,7 @@ class VarnishHandler(Telnet):
             Start using the configuration specified by configname for all new requests.   Existing  requests
             will coninue using whichever configuration was in use when they arrived.
         """
-        return self.fetch('vcl.use %s' % configname)
+        return self.fetch(f"vcl.use {configname}")
 
     def vcl_discard(self, configname):
         """
@@ -180,7 +191,7 @@ class VarnishHandler(Telnet):
             Discard  the  configuration  specified by configname.  This will have no effect if the specified
             configuration has a non-zero reference count.
         """
-        return self.fetch('vcl.discard %s' % configname)
+        return self.fetch(f"vcl.discard {configname}")
 
     def vcl_list(self):
         """
@@ -189,9 +200,9 @@ class VarnishHandler(Telnet):
             is indicated with an asterisk ("*").
         """
         vcls = {}
-        for line in self.fetch('vcl.list')[1].splitlines():
+        for line in self.fetch("vcl.list")[1].splitlines():
             a = line.split()
-            vcls[a[2]] = tuple(a[:-1])
+            vcls[a[-1]] = tuple(a[:-1])
         return vcls
 
     # Param methods
@@ -202,8 +213,9 @@ class VarnishHandler(Telnet):
               If the -l option is specified, the list includes a brief explanation of each parameter.
               If a param is specified, display only the value and explanation for this parameter.
         """
-        cmd = 'param.show '
-        if l: cmd += '-l '
+        cmd = "param.show "
+        if l:
+            cmd += "-l "
         return self.fetch(cmd + param)
 
     def param_set(self, param, value):
@@ -212,7 +224,7 @@ class VarnishHandler(Telnet):
               Set the parameter specified by param to the specified value.  See Run-Time Parameters for a list
               of paramea ters.
         """
-        self.fetch('param.set %s %s' % (param, value))
+        self.fetch(f"param.set {param} {value}")
 
     # Ban methods
     def ban(self, expression):
@@ -221,7 +233,7 @@ class VarnishHandler(Telnet):
             Immediately invalidate all documents matching the ban expression.  See Ban Expressions for  more
             documentation and examples.
         """
-        return self.fetch('ban %s' % expression)[1]
+        return self.fetch(f"ban {expression}")[1]
 
     def ban_url(self, regex):
         """
@@ -230,7 +242,7 @@ class VarnishHandler(Telnet):
             note  that the Host part of the URL is ignored, so if you have several virtual hosts all of them
             will be banned. Use ban to specify a complete ban if you need to narrow it down.
         """
-        return self.fetch('ban.url %s' % regex)[1]
+        return self.fetch(f"ban.url {regex}")[1]
 
     def ban_list(self):
         """
@@ -258,7 +270,7 @@ class VarnishHandler(Telnet):
 
             Then follows the actual ban it self.
         """
-        return self.fetch('ban.list')[1]
+        return self.fetch("ban.list")[1]
 
     def purge_url(self, url):
         """
@@ -271,6 +283,7 @@ class ThreadedRunner(Thread):
     """
     Runs commands on a particular varnish server in a separate thread
     """
+
     def __init__(self, addr, *commands, **kwargs):
         self.addr = addr
         self.commands = commands
@@ -280,11 +293,12 @@ class ThreadedRunner(Thread):
     def run(self):
         handler = VarnishHandler(self.addr, **self.kwargs)
         for cmd in self.commands:
-            if isinstance(cmd, tuple) and len(cmd)>1:
-                getattr(handler, cmd[0].replace('.','_'))(*cmd[1:])
+            if isinstance(cmd, tuple) and len(cmd) > 1:
+                getattr(handler, cmd[0].replace(".", "_"))(*cmd[1:])
             else:
-                getattr(handler, cmd.replace('.','_'))()
+                getattr(handler, cmd.replace(".", "_"))()
         handler.close()
+
 
 def run(addr, *commands, **kwargs):
     """
@@ -293,35 +307,37 @@ def run(addr, *commands, **kwargs):
     results = []
     handler = VarnishHandler(addr, **kwargs)
     for cmd in commands:
-        if isinstance(cmd, tuple) and len(cmd)>1:
-            results.extend([getattr(handler, c[0].replace('.','_'))(*c[1:]) for c in cmd])
+        if isinstance(cmd, tuple) and len(cmd) > 1:
+            results.extend(
+                [getattr(handler, c[0].replace(".", "_"))(*c[1:]) for c in cmd]
+            )
         else:
-            results.append(getattr(handler, cmd.replace('.','_'))(*commands[1:]))
+            results.append(getattr(handler, cmd.replace(".", "_"))(*commands[1:]))
             break
     handler.close()
     return results
 
+
 class VarnishManager(object):
     def __init__(self, servers):
         if not len(servers):
-            logging.warn('No servers found, please declare some')
+            logging.warn("No servers found, please declare some")
         self.servers = servers
 
     def run(self, *commands, **kwargs):
-        threaded = kwargs.pop('threaded', False)
+        threaded = kwargs.pop("threaded", False)
         for server in self.servers:
             if threaded:
-                [ThreadedRunner(server, *commands, **kwargs).start()
-                    for server in self.servers]
+                [
+                    ThreadedRunner(server, *commands, **kwargs).start()
+                    for server in self.servers
+                ]
             else:
-                return [run(server, *commands, **kwargs)
-                            for server in self.servers]
+                return [run(server, *commands, **kwargs) for server in self.servers]
 
     def help(self, *args):
-        return run(self.servers[0], *('help',)+args)[0]
+        return run(self.servers[0], *("help",) + args)[0]
 
     def close(self):
-        self.run('close', threaded=True)
+        self.run("close", threaded=True)
         self.servers = ()
-
-
